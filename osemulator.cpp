@@ -11,29 +11,31 @@
 #include <fstream>
 #include <chrono>
 #include <iomanip>
-//#include "config.h"
+#include "config.h"
+#include "process.h"
 //#include "scheduler.h"
-//#include "process.h"
 
-struct ProcessStub {
-    std::string name;
-    int id;
-    bool finished{false};
-    std::vector<std::string> logs;
-    std::map<std::string, uint16_t> vars;
-    std::mutex mtx;
-};
+//ProcessStub and repository helpers are provided in process.h
 
-//Central process repo
-static std::map<std::string, std::shared_ptr<ProcessStub>> process_repository;
-static std::atomic<int> process_counter{0};
-static std::mutex repository_mutex;
+//Config (from config.txt after initialization)
+static Config config;
+static bool initialized = false;
 
-//Scheduler/config hooks (placeholders for now)
-//Config config;
+/*
+Use these to pass config values for scheduler
+config.num_cpu = num_cpu
+config.scheduler = scheduler
+config.quantum_cycles = quantum_cycles
+config.batch_process_freq = batch_process_freq
+config.min_ins << std::endl;
+config.max_ins << std::endl;
+config.delay_per_exec << std::endl;
+*/
+
+//Scheduler integrated later in scheduler.h
 //Scheduler scheduler(config);
 
-//Flags for display shell
+//Flags for display
 static std::atomic<bool> scheduler_running{false};
 static std::thread scheduler_thread;
 static std::condition_variable_any scheduler_cv;
@@ -44,30 +46,6 @@ static void clear_console() {
     for (int i = 0; i < 60; ++i) std::cout << '\n';
 }
 
-//Create a new process stub
-static std::shared_ptr<ProcessStub> create_process(const std::string& name) {
-    std::lock_guard<std::mutex> lk(repository_mutex);
-    auto it = process_repository.find(name);
-    if (it != process_repository.end()) return it->second;
-
-    int id = ++process_counter;
-    auto p = std::make_shared<ProcessStub>();
-    p->name = name;
-    p->id = id;
-    p->finished = false;
-    p->logs.push_back("[init] Process: " + name);
-    process_repository[name] = p;
-    return p;
-}
-
-//Name generator
-static std::string gen_auto_name() {
-    int n = ++process_counter;
-    std::ostringstream ss;
-    ss << 'p' << std::setw(2) << std::setfill('0') << n;
-    return ss.str();
-}
-
 //Loop simulatin logging and finishing
 static void scheduler_loop(int interval_ms) {
     while (scheduler_running.load()) {
@@ -75,14 +53,14 @@ static void scheduler_loop(int interval_ms) {
         std::string name;
         {
             std::lock_guard<std::mutex> lk(repository_mutex);
-            int n = process_repository.size() + 1;
+            int n = processes.size() + 1;
             std::ostringstream ss; ss << 'p' << std::setw(2) << std::setfill('0') << n;
             name = ss.str();
         }
         auto p = create_process(name);
         {
             std::lock_guard<std::mutex> lk(p->mtx);
-            p->logs.push_back("Hello world from " + p->name + "!");
+            //p->logs.push_back("Hello world from " + p->name + "!");
         }
 
         //Let it run for a short time thwn mark finished later
@@ -90,21 +68,21 @@ static void scheduler_loop(int interval_ms) {
 
         //Randomly decide to finish some processes
         {
-            std::lock_guard<std::mutex> lk(p->mtx);
             if (!p->finished) {
-                p->logs.push_back("[finish] " + p->name + " finished execution.");
+                add_log(p, std::string("[finish] ") + p->name + " finished execution.");
+                std::lock_guard<std::mutex> lk(p->mtx);
                 p->finished = true;
             }
         }
     }
 }
 
-//Print summary
+//Print summary works for displaying and writing to file
 static void print_summary(std::ostream &out) {
     std::lock_guard<std::mutex> lk(repository_mutex);
-    int total = process_repository.size();
+    int total = processes.size();
     int running = 0, finished = 0;
-    for (auto &kv : process_repository) {
+    for (auto &kv : processes) {
         auto &p = kv.second;
         std::lock_guard<std::mutex> plk(p->mtx);
         if (p->finished) ++finished; else ++running;
@@ -112,15 +90,30 @@ static void print_summary(std::ostream &out) {
 
     out << "CPU Utilization (simulated): " << (running>0?50:0) << "%" << std::endl;
     out << "Cores used: " << running << std::endl;
-    out << "Cores free: " << (4 - running) << " (simulated)" << std::endl;
-    out << "Total processes: " << total << std::endl;
-    out << "Running: " << running << "  Finished: " << finished << std::endl;
-    out << "Processes:" << std::endl;
-    for (auto &kv : process_repository) {
+    out << "Cores available: " << (4 - running) << " (simulated)\n" << std::endl;
+    out << "---------------------------------------------------" << std::endl;
+    out << "Running Processes:" << std::endl;
+    for (auto &kv : processes) {
         auto &p = kv.second;
         std::lock_guard<std::mutex> plk(p->mtx);
-        out << " - " << p->name << " (id=" << p->id << ") " << (p->finished?"[finished]":"[running]") << std::endl;
+        if (!p->finished) {
+            std::string last_time = "-";
+            if (!p->logs.empty()) last_time = p->logs.back().timestamp;
+            out << p->name << " \t(" << last_time << ") \tCore: " << std::endl;
+        }
     }
+
+    out << "\nFinished Processes:" << std::endl;
+    for (auto &kv : processes) {
+        auto &p = kv.second;
+        std::lock_guard<std::mutex> plk(p->mtx);
+        if (p->finished) {
+            std::string last_time = "-";
+            if (!p->logs.empty()) last_time = p->logs.back().timestamp;
+            out << p->name << " \t(" << last_time << ") \tFinished" << std::endl;
+        }
+    }
+    out << "---------------------------------------------------" << std::endl;
 }
 
 //Save summary to file for report-util
@@ -135,13 +128,29 @@ static void save_report_util(const std::string &path) {
     std::cout << "Saved report to " << path << std::endl;
 }
 
+static void print_process(const std::shared_ptr<ProcessStub>& p) {
+    std::cout << "\nProcess name: " << p->name << std::endl;
+    std::cout << "ID: " << p->id << std::endl;
+    std::cout << "Logs: " << std::endl;
+    {
+        std::lock_guard<std::mutex> plk(p->mtx);
+        for (const auto &entry : p->logs) {
+            std::cout << "(" << entry.timestamp << ")" << " Core: " << "core";
+            std::cout << "\t\"" << entry.message << "\"" << std::endl;
+        }
+    }
+    std::cout << "\nCurrent Instruction Line: " << std::endl;
+    std::cout << "\nLines of Code: " << std::endl;
+    std::cout << std::endl;
+}
+
 //Run process interactive screen
 static void run_process_screen(const std::string& process_name) {
     std::shared_ptr<ProcessStub> p;
     {
         std::lock_guard<std::mutex> lk(repository_mutex);
-        auto it = process_repository.find(process_name);
-        if (it == process_repository.end()) {
+        auto it = processes.find(process_name);
+        if (it == processes.end()) {
             std::cout << "Process " << process_name << " not found." << std::endl;
             return;
         }
@@ -154,7 +163,7 @@ static void run_process_screen(const std::string& process_name) {
     }
 
     clear_console();
-    std::cout << "Process name: " << process_name << std::endl;
+    print_process(p);
 
     std::string line;
     while (true) {
@@ -165,11 +174,7 @@ static void run_process_screen(const std::string& process_name) {
         ss >> cmd;
         if (cmd == "exit") break;
         else if (cmd == "process-smi") {
-            std::lock_guard<std::mutex> plk(p->mtx);
-            std::cout << "Process: " << p->name << " ID=" << p->id << std::endl;
-            if (p->finished) std::cout << "Finished!" << std::endl;
-            std::cout << "Logs:" << std::endl;
-            for (auto &l : p->logs) std::cout << "  " << l << std::endl;
+            print_process(p);
         } else {
             std::cout << "Unknown command inside screen. Available: process-smi, exit" << std::endl;
         }
@@ -180,7 +185,6 @@ static void run_process_screen(const std::string& process_name) {
 
 //Main menu loop
 static void run_main_menu() {
-    bool initialized = false; //Placeholder until config is added
     std::string command;
 
     std::cout << "Welcome to CSOPESY!" << std::endl;
@@ -205,9 +209,21 @@ static void run_main_menu() {
         }
 
         if (root == "initialize") {
-            //Placeholder: read config.txt later
-            initialized = true;
-            std::cout << "Initialized (config.txt) placeholder" << std::endl;
+            //Load config.txt
+            auto err = load_config_from_file("config.txt", config);
+            if (err.has_value()) {
+                std::cout << "Failed to initialize: " << err.value() << std::endl;
+            } else {
+                initialized = true;
+                std::cout << "Initialized from config.txt" << std::endl;
+                std::cout << " num-cpu=" << config.num_cpu  << std::endl;
+                std::cout << " scheduler=" << config.scheduler << std::endl;
+                std::cout << " quantum-cycles=" << config.quantum_cycles << std::endl;
+                std::cout << " batch-process-freq=" << config.batch_process_freq << std::endl;
+                std::cout << " min-ins=" << config.min_ins << std::endl;
+                std::cout << " max-ins=" << config.max_ins << std::endl;
+                std::cout << " delay-per-exec=" << config.delay_per_exec << std::endl;
+            }
             continue;
         }
 
@@ -268,7 +284,7 @@ static void run_main_menu() {
         }
 
         if (root == "report-util") {
-            //save_report_util("csopesy-log.txt");
+            save_report_util("csopesy-log.txt");
             continue;
         }
 
