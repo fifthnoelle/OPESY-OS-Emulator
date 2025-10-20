@@ -32,7 +32,7 @@ config.max_ins << std::endl;
 config.delay_per_exec << std::endl;
 */
 
-//Scheduler integrated later in scheduler.h
+//Scheduler into scheduler.h, also please look at scheduler_loop()
 //Scheduler scheduler(config);
 
 //Flags for display
@@ -46,7 +46,7 @@ static void clear_console() {
     for (int i = 0; i < 60; ++i) std::cout << '\n';
 }
 
-//Loop simulatin logging and finishing
+//This is not a real scheduler, just simulating process creation and finishing, pls delete later
 static void scheduler_loop(int interval_ms) {
     while (scheduler_running.load()) {
         //Generate a dummy process name and create it
@@ -69,7 +69,6 @@ static void scheduler_loop(int interval_ms) {
         //Randomly decide to finish some processes
         {
             if (!p->finished) {
-                add_log(p, std::string("[finish] ") + p->name + " finished execution.");
                 std::lock_guard<std::mutex> lk(p->mtx);
                 p->finished = true;
             }
