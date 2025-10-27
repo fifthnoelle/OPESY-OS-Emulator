@@ -15,6 +15,8 @@
 #include "process.h"
 //#include "scheduler.h"
 
+using namespace std;
+
 //ProcessStub and repository helpers are provided in process.h
 
 //Config (from config.txt after initialization)
@@ -27,49 +29,49 @@ config.num_cpu = num_cpu
 config.scheduler = scheduler
 config.quantum_cycles = quantum_cycles
 config.batch_process_freq = batch_process_freq
-config.min_ins << std::endl;
-config.max_ins << std::endl;
-config.delay_per_exec << std::endl;
+config.min_ins <<  endl;
+config.max_ins <<  endl;
+config.delay_per_exec <<  endl;
 */
 
 //Scheduler into scheduler.h, also please look at scheduler_loop()
 //Scheduler scheduler(config);
 
 //Flags for display
-static std::atomic<bool> scheduler_running{false};
-static std::thread scheduler_thread;
-static std::condition_variable_any scheduler_cv;
+static  atomic<bool> scheduler_running{false};
+static  thread scheduler_thread;
+static  condition_variable_any scheduler_cv;
 
 //Util for clearing console
 static void clear_console() {
     //Clear screen, implement later?
-    for (int i = 0; i < 60; ++i) std::cout << '\n';
+    for (int i = 0; i < 60; ++i)  cout << '\n';
 }
 
 //This is not a real scheduler, just simulating process creation and finishing, pls delete later
 static void scheduler_loop(int interval_ms) {
     while (scheduler_running.load()) {
         //Generate a dummy process name and create it
-        std::string name;
+         string name;
         {
-            std::lock_guard<std::mutex> lk(repository_mutex);
+             lock_guard< mutex> lk(repository_mutex);
             int n = processes.size() + 1;
-            std::ostringstream ss; ss << 'p' << std::setw(2) << std::setfill('0') << n;
+             ostringstream ss; ss << 'p' <<  setw(2) <<  setfill('0') << n;
             name = ss.str();
         }
         auto p = create_process(name);
         {
-            std::lock_guard<std::mutex> lk(p->mtx);
+             lock_guard< mutex> lk(p->mtx);
             //p->logs.push_back("Hello world from " + p->name + "!");
         }
 
         //Let it run for a short time thwn mark finished later
-        std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+         this_thread::sleep_for( chrono::milliseconds(interval_ms));
 
         //Randomly decide to finish some processes
         {
             if (!p->finished) {
-                std::lock_guard<std::mutex> lk(p->mtx);
+                 lock_guard< mutex> lk(p->mtx);
                 p->finished = true;
             }
         }
@@ -77,105 +79,142 @@ static void scheduler_loop(int interval_ms) {
 }
 
 //Print summary works for displaying and writing to file
-static void print_summary(std::ostream &out) {
-    std::lock_guard<std::mutex> lk(repository_mutex);
+static void print_summary( ostream &out) {
+     lock_guard< mutex> lk(repository_mutex);
     int total = processes.size();
     int running = 0, finished = 0;
     for (auto &kv : processes) {
         auto &p = kv.second;
-        std::lock_guard<std::mutex> plk(p->mtx);
+         lock_guard< mutex> plk(p->mtx);
         if (p->finished) ++finished; else ++running;
     }
 
-    out << "CPU Utilization (simulated): " << (running>0?50:0) << "%" << std::endl;
-    out << "Cores used: " << running << std::endl;
-    out << "Cores available: " << (4 - running) << " (simulated)\n" << std::endl;
-    out << "---------------------------------------------------" << std::endl;
-    out << "Running Processes:" << std::endl;
+    out << "CPU Utilization (simulated): " << (running>0?50:0) << "%" <<  endl;
+    out << "Cores used: " << running <<  endl;
+    out << "Cores available: " << (4 - running) << " (simulated)\n" <<  endl;
+    out << "---------------------------------------------------" <<  endl;
+    out << "Running Processes:" <<  endl;
     for (auto &kv : processes) {
         auto &p = kv.second;
-        std::lock_guard<std::mutex> plk(p->mtx);
+         lock_guard< mutex> plk(p->mtx);
         if (!p->finished) {
-            std::string last_time = "-";
+             string last_time = "-";
             if (!p->logs.empty()) last_time = p->logs.back().timestamp;
-            out << p->name << " \t(" << last_time << ") \tCore: " << std::endl;
+            out << p->name << " \t(" << last_time << ") \tCore: " <<  endl;
         }
     }
 
-    out << "\nFinished Processes:" << std::endl;
+    out << "\nFinished Processes:" <<  endl;
     for (auto &kv : processes) {
         auto &p = kv.second;
-        std::lock_guard<std::mutex> plk(p->mtx);
+         lock_guard< mutex> plk(p->mtx);
         if (p->finished) {
-            std::string last_time = "-";
+             string last_time = "-";
             if (!p->logs.empty()) last_time = p->logs.back().timestamp;
-            out << p->name << " \t(" << last_time << ") \tFinished" << std::endl;
+            out << p->name << " \t(" << last_time << ") \tFinished" <<  endl;
         }
     }
-    out << "---------------------------------------------------" << std::endl;
+    out << "---------------------------------------------------" <<  endl;
 }
 
 //Save summary to file for report-util
-static void save_report_util(const std::string &path) {
-    std::ofstream ofs(path);
+static void save_report_util(const  string &path) {
+     ofstream ofs(path);
     if (!ofs) {
-        std::cout << "Failed to open " << path << " for writing." << std::endl;
+         cout << "Failed to open " << path << " for writing." <<  endl;
         return;
     }
     print_summary(ofs);
     ofs.close();
-    std::cout << "Saved report to " << path << std::endl;
+     cout << "Saved report to " << path <<  endl;
 }
 
-static void print_process(const std::shared_ptr<ProcessStub>& p) {
-    std::cout << "\nProcess name: " << p->name << std::endl;
-    std::cout << "ID: " << p->id << std::endl;
-    std::cout << "Logs: " << std::endl;
+static void print_process(const  shared_ptr<ProcessStub>& p) {
+     cout << "\nProcess name: " << p->name <<  endl;
+     cout << "ID: " << p->id <<  endl;
+     cout << "Logs: " <<  endl;
     {
-        std::lock_guard<std::mutex> plk(p->mtx);
+         lock_guard< mutex> plk(p->mtx);
         for (const auto &entry : p->logs) {
-            std::cout << "(" << entry.timestamp << ")" << " Core: " << "core";
-            std::cout << "\t\"" << entry.message << "\"" << std::endl;
+             cout << "(" << entry.timestamp << ")" << " Core: " << "core";
+             cout << "\t\"" << entry.message << "\"" <<  endl;
         }
     }
-    std::cout << "\nCurrent Instruction Line: " << std::endl;
-    std::cout << "\nLines of Code: " << std::endl;
-    std::cout << std::endl;
+     cout << "\nCurrent Instruction Line: " <<  endl;
+     cout << "\nLines of Code: " <<  endl;
+     cout <<  endl;
 }
 
 //Run process interactive screen
-static void run_process_screen(const std::string& process_name) {
-    std::shared_ptr<ProcessStub> p;
+static void run_process_screen(const  string& process_name) {
+     shared_ptr<ProcessStub> p;
     {
-        std::lock_guard<std::mutex> lk(repository_mutex);
+         lock_guard< mutex> lk(repository_mutex);
         auto it = processes.find(process_name);
         if (it == processes.end()) {
-            std::cout << "Process " << process_name << " not found." << std::endl;
+             cout << "Process " << process_name << " not found." <<  endl;
             return;
         }
         p = it->second;
     }
 
     if (p->finished) {
-        std::cout << "Process " << process_name << " has already finished." << std::endl;
+         cout << "Process " << process_name << " has already finished." <<  endl;
         return;
     }
 
     clear_console();
     print_process(p);
 
-    std::string line;
+     string line;
     while (true) {
-        std::cout << "root:\\" << process_name << "\\> ";
-        if (!std::getline(std::cin, line)) break;
-        std::stringstream ss(line);
-        std::string cmd;
+         cout << "root:\\" << process_name << "\\> ";
+        if (! getline( cin, line)) break;
+        stringstream ss(line);
+        string cmd;
         ss >> cmd;
+
+        stringstream numbers;
+        string toadd;
+
+        vector<double> nums;
         if (cmd == "exit") break;
         else if (cmd == "process-smi") {
             print_process(p);
-        } else {
-            std::cout << "Unknown command inside screen. Available: process-smi, exit" << std::endl;
+        } 
+        else if(cmd == "add" || cmd == "sub"){
+
+            string inputs;
+            do{
+                cout << "Enter at least 2 numbers to add seperated by space: " << endl;
+                getline(cin, inputs);
+            
+                numbers << inputs;
+
+                while(getline(numbers, toadd, ' ')){
+
+                    nums.push_back(stoi(toadd));
+
+                }
+            }while(nums.size() < 2);
+
+            auto result = arithmetic(nums, "add");
+            cout << "Result: " << result << endl;
+        }
+        else if(cmd == "print"){
+
+        }
+        else if(cmd == "sleep"){
+            
+        }
+        else if(cmd == "declare"){
+
+        }
+        else if(cmd == "for"){
+
+        }
+        else {
+             cout << "Unknown command inside screen. Available: process-smi, exit, add, sub" <<  endl;
         }
     }
 
@@ -184,17 +223,17 @@ static void run_process_screen(const std::string& process_name) {
 
 //Main menu loop
 static void run_main_menu() {
-    std::string command;
+     string command;
 
-    std::cout << "Welcome to CSOPESY!" << std::endl;
-    std::cout << "Version Date: October, 2025" << std::endl << std::endl;
+     cout << "Welcome to CSOPESY!" <<  endl;
+     cout << "Version Date: October, 2025" <<  endl <<  endl;
 
     while (true) {
-        std::cout << "root:\\> ";
-        if (!std::getline(std::cin, command)) break;
+         cout << "root:\\> ";
+        if (! getline( cin, command)) break;
 
-        std::stringstream ss(command);
-        std::string root;
+         stringstream ss(command);
+         string root;
         ss >> root;
         if (root.empty()) continue;
 
@@ -211,73 +250,73 @@ static void run_main_menu() {
             //Load config.txt
             auto err = load_config_from_file("config.txt", config);
             if (err.has_value()) {
-                std::cout << "Failed to initialize: " << err.value() << std::endl;
+                 cout << "Failed to initialize: " << err.value() <<  endl;
             } else {
                 initialized = true;
-                std::cout << "Initialized from config.txt" << std::endl;
-                std::cout << " num-cpu=" << config.num_cpu  << std::endl;
-                std::cout << " scheduler=" << config.scheduler << std::endl;
-                std::cout << " quantum-cycles=" << config.quantum_cycles << std::endl;
-                std::cout << " batch-process-freq=" << config.batch_process_freq << std::endl;
-                std::cout << " min-ins=" << config.min_ins << std::endl;
-                std::cout << " max-ins=" << config.max_ins << std::endl;
-                std::cout << " delay-per-exec=" << config.delay_per_exec << std::endl;
+                 cout << "Initialized from config.txt" <<  endl;
+                 cout << " num-cpu=" << config.num_cpu  <<  endl;
+                 cout << " scheduler=" << config.scheduler <<  endl;
+                 cout << " quantum-cycles=" << config.quantum_cycles <<  endl;
+                 cout << " batch-process-freq=" << config.batch_process_freq <<  endl;
+                 cout << " min-ins=" << config.min_ins <<  endl;
+                 cout << " max-ins=" << config.max_ins <<  endl;
+                 cout << " delay-per-exec=" << config.delay_per_exec <<  endl;
             }
             continue;
         }
 
         if (!initialized && root != "exit") {
-            std::cout << "Error: Must run 'initialize' first." << std::endl;
+             cout << "Error: Must run 'initialize' first." <<  endl;
             continue;
         }
 
         if (root == "screen") {
-            std::string opt;
+             string opt;
             ss >> opt;
             if (opt == "-s") {
-                std::string pname;
+                 string pname;
                 ss >> pname;
                 if (pname.empty()) {
-                    std::cout << "Usage: screen -s <process_name>" << std::endl;
+                     cout << "Usage: screen -s <process_name>" <<  endl;
                 } else {
                     create_process(pname);
                     run_process_screen(pname);
                 }
             } else if (opt == "-r") {
-                std::string pname;
+                 string pname;
                 ss >> pname;
                 if (pname.empty()) {
-                    std::cout << "Usage: screen -r <process_name>" << std::endl;
+                     cout << "Usage: screen -r <process_name>" <<  endl;
                 } else {
                     run_process_screen(pname);
                 }
             } else if (opt == "-ls") {
-                print_summary(std::cout);
+                print_summary( cout);
             } else {
-                std::cout << "screen commands: -s <name> (create+attach), -r <name> (attach), -ls (list)" << std::endl;
+                 cout << "screen commands: -s <name> (create+attach), -r <name> (attach), -ls (list)" <<  endl;
             }
             continue;
         }
 
         if (root == "scheduler-start") {
             if (scheduler_running.load()) {
-                std::cout << "Scheduler already running." << std::endl;
+                 cout << "Scheduler already running." <<  endl;
             } else {
                 scheduler_running.store(true);
                 // spawn thread for sim
-                scheduler_thread = std::thread([](){ scheduler_loop(500); });
-                std::cout << "Scheduler started (simulated)." << std::endl;
+                scheduler_thread =  thread([](){ scheduler_loop(500); });
+                 cout << "Scheduler started (simulated)." <<  endl;
             }
             continue;
         }
 
         if (root == "scheduler-stop") {
             if (!scheduler_running.load()) {
-                std::cout << "Scheduler is not running." << std::endl;
+                 cout << "Scheduler is not running." <<  endl;
             } else {
                 scheduler_running.store(false);
                 if (scheduler_thread.joinable()) scheduler_thread.join();
-                std::cout << "Scheduler stopped." << std::endl;
+                 cout << "Scheduler stopped." <<  endl;
             }
             continue;
         }
@@ -287,7 +326,7 @@ static void run_main_menu() {
             continue;
         }
 
-        std::cout << "Unknown command. Available: initialize, exit, screen, scheduler-start, scheduler-stop, report-util" << std::endl;
+         cout << "Unknown command. Available: initialize, exit, screen, scheduler-start, scheduler-stop, report-util" <<  endl;
     }
 }
 
