@@ -17,6 +17,12 @@
 
 using namespace std;
 
+struct CustomProcessLines {
+    vector<string> lines;         // all code lines (DECLARE, ADD, etc.)
+    vector<string> runningLines;  // lines currently executing
+    int lineNumber = 0;
+};
+
 struct ProcessStub {
     string name;
     int id;
@@ -25,6 +31,7 @@ struct ProcessStub {
     struct LogEntry { string timestamp; string message; };
     vector<LogEntry> logs;
     map<string, uint16_t> vars;
+    CustomProcessLines code;
     mutex mtx;
 };
 
@@ -35,6 +42,7 @@ struct ProcessStub {
  * 4. I don't know how to deal with FOR yet
 */
 
+/**
 //I hope I understood the assignment ToT
 struct CustomProcessLines{
     ProcessStub process;
@@ -51,11 +59,12 @@ struct CustomProcessLines{
     vector<bool> boolVars = {true,false,true};
     vector<string> checker = {"uint16_t","int","double","float","long","string","char","bool"}; //To check if variable is of available datatype
     
-    /**Please help how do you store into a loop a set of lines?*/
+    //Please help how do you store into a loop a set of lines?
    
     int pause; //pause = sleep time and also sleep emulator for 5 ms passing per instruction if used in for loop
     int lineNumber = 0;
 };
+*/
 
 inline map< string, shared_ptr<ProcessStub>> processes;
 inline atomic<int> process_counter{0};
@@ -82,7 +91,7 @@ inline string timestamp_now() {
 // Adds a log with a timestamp to the process (thread-safe)
 inline void add_log(const  shared_ptr<ProcessStub> &p, const  string &msg) {
     if (!p) return;
-     lock_guard< mutex> lk(p->mtx);
+    lock_guard< mutex> lk(p->mtx);
     ProcessStub::LogEntry e;
     e.timestamp = timestamp_now();
     e.message = msg;
@@ -143,6 +152,31 @@ inline auto arithmetic(vector<double> nums, string operation){
 inline string declaration(string declaration){
 
     return "";
+}
+
+void generate_dummy_instructions(shared_ptr<ProcessStub> p, int num_instructions) {
+    static const vector<string> ops = {"DECLARE", "ADD", "SUBTRACT", "PRINT", "SLEEP", "FOR"};
+    for (int i = 0; i < num_instructions; ++i) {
+        string op = ops[rand() % ops.size()];
+        if (op == "DECLARE") {
+            string var = "x" + to_string(i);
+            int val = rand() % 100;
+            p->code.lines.push_back("DECLARE " + var + " " + to_string(val));
+        } else if (op == "ADD") {
+            p->code.lines.push_back("ADD x0 x1 " + to_string(rand() % 10));
+        } else if (op == "SUBTRACT") {
+            p->code.lines.push_back("SUBTRACT x0 x1 " + to_string(rand() % 10));
+        } else if (op == "PRINT") {
+            p->code.lines.push_back("PRINT \"Hello world from " + p->name + "!\"");
+        } else if (op == "SLEEP") {
+            p->code.lines.push_back("SLEEP " + to_string(rand() % 200));
+        } else if (op == "FOR") {
+            int repeats = 1 + rand() % 3;
+            for (int j = 0; j < repeats; ++j) {
+                p->code.lines.push_back("PRINT \"FOR iteration " + to_string(j+1) + "\"");
+            }
+        }
+    }
 }
 
 #endif
