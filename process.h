@@ -28,6 +28,35 @@ struct ProcessStub {
     mutex mtx;
 };
 
+/**My idea here is that 
+ * 1. When user DECLAREs a variable, it gets added to vector lines as a whole string before return statement
+ * 2. When user runs PRINT, DECLARE, ADD, SUB; vector runningLines + lines will add the corresponding code to itself
+ * 3. I'm thinking that for ADD or SUB, if user adds or subtracts a variable, checks if variable exists in declared variables first
+ * 4. I don't know how to deal with FOR yet
+*/
+
+//I hope I understood the assignment ToT
+struct CustomProcessLines{
+    ProcessStub process;
+    vector<string> lines = {"Declare:       unint16_t var1 = 0;","Declare:      uint16_t var2 = 0;","Declare:       uint16_t var3 = 0;", "Add/Subtract:     return var1;"}; //Idea here is that whenever a new declaration happens, they get added here as the whole string
+    vector<string> runningLines = {"Declare:       unint16_t var1 = 0;","Declare:       uint16_t var2 = 0;","Declare:       uint16_t var3 = 0;"};
+    vector<int> runningLineNumbers = {1,2,3,4};
+    vector<uint16_t> uintVars = {0,0,0};
+    vector<int> intVars = {0,0,0};
+    vector<double> doubleVars = {0.0,0.0,0.0};
+    vector<float> floatVars = {0.0f,0.0f,0.0f};
+    vector<long> longVars = {0,0,0};
+    vector<string> stringVars = {"Hello World from ...","Hello World from ...","Hello World from ..."};
+    vector<char> charVars = {'a','b','c'};
+    vector<bool> boolVars = {true,false,true};
+    vector<string> checker = {"uint16_t","int","double","float","long","string","char","bool"}; //To check if variable is of available datatype
+    
+    /**Please help how do you store into a loop a set of lines?*/
+   
+    int pause; //pause = sleep time and also sleep emulator for 5 ms passing per instruction if used in for loop
+    int lineNumber = 0;
+};
+
 inline map< string, shared_ptr<ProcessStub>> processes;
 inline atomic<int> process_counter{0};
 inline mutex repository_mutex;
@@ -109,6 +138,11 @@ inline auto arithmetic(vector<double> nums, string operation){
     
     return result;
 
+}
+
+inline string declaration(string declaration){
+
+    return "";
 }
 
 #endif

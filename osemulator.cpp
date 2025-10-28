@@ -1,5 +1,7 @@
 //g++ -std=c++17 -O2 -pthread -o osemulator.exe osemulator.cpp
 //.\osemulator.exe
+
+/**Need to show in process the lines of code, etc. */
 #include <iostream>
 #include <sstream>
 #include <map>
@@ -54,9 +56,12 @@ static void scheduler_loop(int interval_ms) {
         //Generate a dummy process name and create it
          string name;
         {
-             lock_guard< mutex> lk(repository_mutex);
+            lock_guard< mutex> lk(repository_mutex);
             int n = processes.size() + 1;
-             ostringstream ss; ss << 'p' <<  setw(2) <<  setfill('0') << n;
+
+
+
+            ostringstream ss; ss << 'p' <<  setw(2) <<  setfill('0') << n;
             name = ss.str();
         }
         auto p = create_process(name);
@@ -130,9 +135,11 @@ static void save_report_util(const  string &path) {
 }
 
 static void print_process(const  shared_ptr<ProcessStub>& p) {
-     cout << "\nProcess name: " << p->name <<  endl;
-     cout << "ID: " << p->id <<  endl;
-     cout << "Logs: " <<  endl;
+
+    CustomProcessLines cpl;
+    cout << "\nProcess name: " << p->name <<  endl;
+    cout << "ID: " << p->id <<  endl;
+    cout << "Logs: " <<  endl;
     {
          lock_guard< mutex> plk(p->mtx);
         for (const auto &entry : p->logs) {
@@ -141,7 +148,19 @@ static void print_process(const  shared_ptr<ProcessStub>& p) {
         }
     }
      cout << "\nCurrent Instruction Line: " <<  endl;
+     for(string running: cpl.runningLines){
+        cout << cpl.runningLineNumbers[cpl.lineNumber] << "     " << running << endl;
+        cpl.lineNumber++;
+     }
+
+     cpl.lineNumber = 0;
+
      cout << "\nLines of Code: " <<  endl;
+     for(string line: cpl.lines){
+        cpl.lineNumber += 1;
+        cout << cpl.lineNumber << "     " << line << endl;
+     }
+     cpl.lineNumber = 0;
      cout <<  endl;
 }
 
@@ -214,7 +233,7 @@ static void run_process_screen(const  string& process_name) {
 
         }
         else {
-             cout << "Unknown command inside screen. Available: process-smi, exit, add, sub" <<  endl;
+             cout << "Unknown command inside screen. Available: process-smi, exit, add, sub, print, sleep, declare, for" <<  endl;
         }
     }
 
