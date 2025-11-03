@@ -1,7 +1,6 @@
-CPU Utilization (simulated): 0%
+CPU Utilization: 0.00%
 Cores used: 0
-Cores available: 4 (simulated)
-
+Cores available: 4
 ---------------------------------------------------
 Running Processes:
 

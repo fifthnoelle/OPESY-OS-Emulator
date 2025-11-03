@@ -1,6 +1,5 @@
 //g++ -std=c++17 -O2 -pthread -o osemulator.exe osemulator.cpp
 //.\osemulator.exe
-
 /**Need to show in process the lines of code, etc. */
 #include <iostream>
 #include <sstream>
@@ -32,47 +31,18 @@ config.num_cpu = num_cpu
 config.scheduler = scheduler
 config.quantum_cycles = quantum_cycles
 config.batch_process_freq = batch_process_freq
-config.min_ins <<  endl;
-config.max_ins <<  endl;
-config.delay_per_exec <<  endl;
+config.min_ins = min_ins
+config.max_ins = max_ins 
+config.delay_per_exec = delay_per_exec
 */
 
-//Scheduler into scheduler.h, also please look at scheduler_loop()
-//Scheduler scheduler(config);
 static Scheduler scheduler(config);
-
-//Flags for display
-static  atomic<bool> scheduler_running{false};
-static  thread scheduler_thread;
-static  condition_variable_any scheduler_cv;
 
 //Util for clearing console
 static void clear_console() {
     //Clear screen, implement later?
     //for (int i = 0; i < 60; ++i)  cout << '\n';
     cout << string(50, '\n');
-}
-
-//This is not a real scheduler, just simulating process creation and finishing, pls delete later
-static void scheduler_loop() {
-    int counter = 0;
-    while (scheduler_running.load()) {
-        this_thread::sleep_for(chrono::milliseconds(config.batch_process_freq));
-
-        string name = gen_auto_name();
-        auto p = create_process(name);
-
-        // Random instruction count between min and max
-        int num_ins = config.min_ins + rand() % (config.max_ins - config.min_ins + 1);
-
-        // Fill with dummy instructions
-        generate_dummy_instructions(p, num_ins);
-
-        scheduler.enqueue(p); // Send to Scheduler queue
-
-        cout << "[Scheduler] Generated process " << name
-             << " with " << num_ins << " instructions." << endl;
-    }
 }
 
 //Print summary works for displaying and writing to file
@@ -153,10 +123,6 @@ static void print_process(const  shared_ptr<ProcessStub>& p) {
         cout << (i + 1) << "     " << p->code.lines[i] << endl;
     }
     cout << endl;
-
-     cpl.lineNumber = 0;
-
-     cout << "\nLines of Code: " <<  endl;
      for(string line: cpl.lines){
         cpl.lineNumber += 1;
         cout << cpl.lineNumber << "     " << line << endl;
@@ -423,11 +389,8 @@ static void run_main_menu() {
         if (root.empty()) continue;
 
         if (root == "exit") {
-            //Stop scheduler if running
-            if (scheduler_running.load()) {
-                scheduler_running.store(false);
-                if (scheduler_thread.joinable()) scheduler_thread.join();
-            }
+            // Stop scheduler if running
+            if (scheduler.is_running()) scheduler.stop();
             break;
         }
 
@@ -484,14 +447,11 @@ static void run_main_menu() {
         }
 
         if (root == "scheduler-start") {
-            if (scheduler_running.load()) {
+            if (scheduler.is_running()) {
                 cout << "Scheduler already running." << endl;
             } else {
-                scheduler_running.store(true);
-                // scheduler_thread = thread([](){ scheduler_loop(500); });  // temporarily disabled to prevent input freezing
-                //cout << "Scheduler started (simulated)." << endl;
+                //start scheduler and enable internal producer (simulator)
                 scheduler.start();
-                cout << "Scheduler started." << endl;
             }
             continue;
         }

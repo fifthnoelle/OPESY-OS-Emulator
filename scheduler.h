@@ -31,7 +31,7 @@ public:
     }
 
 private:
-    Config config;
+    const Config& config;
     atomic<bool> running;
     vector<thread> cpu_threads;
     mutex mtx;
@@ -62,7 +62,7 @@ void Scheduler::stop() {
         if (t.joinable()) t.join();
     }
     cpu_threads.clear();
-
+    
     cout << "Scheduler stopped.\n";
 }
 
