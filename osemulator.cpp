@@ -450,7 +450,6 @@ static void run_main_menu() {
             if (scheduler.is_running()) {
                 cout << "Scheduler already running." << endl;
             } else {
-                //start scheduler and enable internal producer (simulator)
                 scheduler.start();
             }
             continue;
