@@ -48,7 +48,11 @@ public:
         cout << "Scheduler started (" << config.scheduler
              << ") with " << config.num_cpu << " cores." << endl;
 
-        // Automatically create 3 dummy processes
+        // launch threads first
+        for (int i = 0; i < config.num_cpu; ++i)
+            core_threads.emplace_back(&Scheduler::core_loop, this, i);
+
+        // now create and enqueue processes
         int num_processes = 3;
         for (int i = 0; i < num_processes; ++i) {
             string pname = "p" + to_string(i + 1);
@@ -56,12 +60,8 @@ public:
             int num_ins = config.min_ins + (rand() % (config.max_ins - config.min_ins + 1));
             generate_dummy_instructions(p, num_ins);
             add_log(p, "Generated " + to_string(num_ins) + " randomized instructions");
-            add_process(p);
+            add_process(p);   // this will now properly wake waiting threads
         }
-
-        // Launch core threads
-        for (int i = 0; i < config.num_cpu; ++i)
-            core_threads.emplace_back(&Scheduler::core_loop, this, i);
     }
 
     void stop() {
