@@ -1,9 +1,10 @@
-CPU Utilization (simulated): 0%
+CPU Utilization: 0.00%
 Cores used: 0
-Cores available: 4 (simulated)
-
+Cores available: 2
 ---------------------------------------------------
 Running Processes:
 
 Finished Processes:
+p2	(2025/11/04 14:47:34.579)	Finished
+p3	(2025/11/04 14:47:34.579)	Finished
 ---------------------------------------------------

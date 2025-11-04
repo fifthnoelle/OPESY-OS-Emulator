@@ -89,13 +89,19 @@ inline string timestamp_now() {
 }
 
 // Adds a log with a timestamp to the process (thread-safe)
-inline void add_log(const  shared_ptr<ProcessStub> &p, const  string &msg) {
+inline void add_log(const shared_ptr<ProcessStub> &p, const string &msg, int core_id = -1) {
     if (!p) return;
-    lock_guard< mutex> lk(p->mtx);
+    lock_guard<mutex> lk(p->mtx);
     ProcessStub::LogEntry e;
     e.timestamp = timestamp_now();
-    e.message = msg;
-    p->logs.push_back( move(e));
+
+    // Only prefix with "Core <id>" if the message itself doesn't already mention it
+    if (core_id >= 0 && msg.find("Core") == string::npos)
+        e.message = "Core " + to_string(core_id) + ": " + msg;
+    else
+        e.message = msg;
+
+    p->logs.push_back(move(e));
 }
 
 //Create a process if it doesn't exist

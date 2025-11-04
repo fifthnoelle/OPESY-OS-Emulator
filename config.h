@@ -53,8 +53,19 @@ static inline  optional<string> load_config_from_file(const string &path, Config
                 if (v < 1) v = 1; if (v > 128) v = 128;
                 out.num_cpu = v;
             } else if (key == "scheduler") {
-                if (val == "fcfs" || val == "rr") out.scheduler = val;
-                else return  optional< string>("invalid-scheduler");
+                // Remove optional quotes (e.g. "fcfs" → fcfs)
+                if (!val.empty() && val.front() == '"' && val.back() == '"') {
+                    val = val.substr(1, val.size() - 2);
+                }
+
+                // Normalize to lowercase just in case
+                for (auto &c : val) c = tolower(c);
+
+                if (val == "fcfs" || val == "rr") {
+                    out.scheduler = val;
+                } else {
+                    return optional<string>("invalid-scheduler");
+                }
             } else if (key == "quantum-cycles") {
                 uint32_t v = static_cast<uint32_t>( stoul(val));
                 if (v < 1) v = 1; out.quantum_cycles = v;
