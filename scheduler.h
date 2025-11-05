@@ -18,6 +18,7 @@ extern atomic<int> active_cores;
 class Scheduler {
 private:
     Config config;
+    CustomProcessLines instructions;
     atomic<bool> running{false};
     vector<thread> core_threads;
     thread batch_thread;  // Thread for periodic batch process creation
@@ -150,6 +151,8 @@ private:
                     ready_queue.push(p);
                     cv.notify_one();
                 }
+
+                
             }
             
             {
