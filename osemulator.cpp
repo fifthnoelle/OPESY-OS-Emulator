@@ -1,5 +1,6 @@
 //g++ -std=c++17 -O2 -pthread -o osemulator.exe osemulator.cpp
 //.\osemulator.exe
+
 /**Need to show in process the lines of code, etc. */
 #include <iostream>
 #include <sstream>
@@ -22,8 +23,9 @@ std::atomic<int> active_cores{0};
 //ProcessStub and repository helpers are provided in process.h
 
 //Config (from config.txt after initialization)
-static Config config;
+static Config global_config;
 static bool initialized = false;
+static unique_ptr<Scheduler> scheduler; 
 
 /*
 Use these to pass config values for scheduler
@@ -31,12 +33,15 @@ config.num_cpu = num_cpu
 config.scheduler = scheduler
 config.quantum_cycles = quantum_cycles
 config.batch_process_freq = batch_process_freq
-config.min_ins = min_ins
-config.max_ins = max_ins 
-config.delay_per_exec = delay_per_exec
+config.min_ins <<  endl;
+config.max_ins <<  endl;
+config.delay_per_exec <<  endl;
 */
 
-static Scheduler scheduler(config);
+//Flags for display
+static  atomic<bool> scheduler_running{false};
+static  thread scheduler_thread;
+static  condition_variable_any scheduler_cv;
 
 //Util for clearing console
 static void clear_console() {
@@ -45,47 +50,75 @@ static void clear_console() {
     cout << string(50, '\n');
 }
 
+//This is not a real scheduler, just simulating process creation and finishing, pls delete later
+static void scheduler_loop() {
+    int counter = 0;
+    while (scheduler_running.load()) {
+        this_thread::sleep_for(chrono::milliseconds(global_config.batch_process_freq));
+
+        string name = gen_auto_name();
+        auto p = create_process(name);
+        if (scheduler) scheduler->add_process(p);
+
+        // Random instruction count between min and max
+        int num_ins = global_config.min_ins + rand() % (global_config.max_ins - global_config.min_ins + 1);
+
+        // Fill with dummy instructions
+        generate_dummy_instructions(p, num_ins);
+
+        //scheduler.enqueue(p); // Send to Scheduler queue
+
+        cout << "[Scheduler] Generated process " << name
+             << " with " << num_ins << " instructions." << endl;
+    }
+}
+
 //Print summary works for displaying and writing to file
 static void print_summary( ostream &out) {
-     lock_guard< mutex> lk(repository_mutex);
+    lock_guard<mutex> lk(repository_mutex);
     int total = processes.size();
     int running = 0, finished = 0;
+
     for (auto &kv : processes) {
         auto &p = kv.second;
-         lock_guard< mutex> plk(p->mtx);
+        lock_guard<mutex> plk(p->mtx);
         if (p->finished) ++finished; else ++running;
     }
 
-    extern atomic<int> active_cores;  // declared globally
-    double utilization = (100.0 * active_cores.load()) / config.num_cpu;
+    extern atomic<int> active_cores;
+    double utilization = (100.0 * active_cores.load()) / global_config.num_cpu;
 
     out << fixed << setprecision(2);
     out << "CPU Utilization: " << utilization << "%" << endl;
     out << "Cores used: " << active_cores.load() << endl;
-    out << "Cores available: " << (config.num_cpu - active_cores.load()) << endl;
-    out << "---------------------------------------------------" <<  endl;
-    out << "Running Processes:" <<  endl;
-    for (auto &kv : processes) {
-        auto &p = kv.second;
-         lock_guard< mutex> plk(p->mtx);
-        if (!p->finished) {
-             string last_time = "-";
-            if (!p->logs.empty()) last_time = p->logs.back().timestamp;
-            out << p->name << " \t(" << last_time << ") \tCore: " <<  endl;
+    out << "Cores available: " << global_config.num_cpu - active_cores.load() << endl;
+    out << "---------------------------------------------------" << endl;
+    out << "Running Processes:" << endl;
+
+    // Query current core states from scheduler
+    if (scheduler) {
+        auto cores = scheduler->get_active_cores();
+        auto proc = scheduler->get_core_processes();
+        for (int i = 0; i < (int)cores.size(); ++i) {
+            if (cores[i] && !proc[i].empty()) {
+                out << proc[i]
+                    << "\t(" << timestamp_now() << ")\tCore " 
+                    << i + 1 << "/" << global_config.num_cpu << endl;
+            }
         }
     }
 
-    out << "\nFinished Processes:" <<  endl;
+    out << "\nFinished Processes:" << endl;
     for (auto &kv : processes) {
         auto &p = kv.second;
-         lock_guard< mutex> plk(p->mtx);
+        lock_guard<mutex> plk(p->mtx);
         if (p->finished) {
-             string last_time = "-";
+            string last_time = "-";
             if (!p->logs.empty()) last_time = p->logs.back().timestamp;
-            out << p->name << " \t(" << last_time << ") \tFinished" <<  endl;
+            out << p->name << "\t(" << last_time << ")\tFinished" << endl;
         }
     }
-    out << "---------------------------------------------------" <<  endl;
+    out << "---------------------------------------------------" << endl;
 }
 
 //Save summary to file for report-util
@@ -113,22 +146,16 @@ static void print_process(const  shared_ptr<ProcessStub>& p) {
              cout << "\t\"" << entry.message << "\"" <<  endl;
         }
     }
-    cout << "\nCurrent Instruction Line:\n";
-    for (size_t i = 0; i < p->code.runningLines.size(); ++i) {
-        cout << (i + 1) << "     " << p->code.runningLines[i] << endl;
-    }
+    //cout << "\nCurrent Instruction Line:\n";
+    //for (size_t i = 0; i < p->code.runningLines.size(); ++i) {
+    //    cout << (i + 1) << "     " << p->code.runningLines[i] << endl;
+    //}
 
     cout << "\nLines of Code:\n";
     for (size_t i = 0; i < p->code.lines.size(); ++i) {
         cout << (i + 1) << "     " << p->code.lines[i] << endl;
     }
     cout << endl;
-     for(string line: cpl.lines){
-        cpl.lineNumber += 1;
-        cout << cpl.lineNumber << "     " << line << endl;
-     }
-     cpl.lineNumber = 0;
-     cout <<  endl;
 }
 
 //Run process interactive screen
@@ -145,7 +172,7 @@ static void run_process_screen(const string& process_name) {
     }
 
     if (p->finished) {
-        cout << "Process " << process_name << " has already finished." << endl;
+        cout << "Process " << process_name << " has already finished execution, but you can still view its logs." << endl;
         return;
     }
 
@@ -238,7 +265,7 @@ static void run_process_screen(const string& process_name) {
                 {
                     lock_guard<mutex> lk(p->mtx);
                     ostringstream linebuf;
-                    linebuf << "Declare: uint16_t " << var << " = " << val << ";";
+                    linebuf << "DECLARE:        uint16_t " << var << " = " << val << ";";
                     p->code.lines.push_back(linebuf.str());
                 }
 
@@ -258,9 +285,9 @@ static void run_process_screen(const string& process_name) {
             // trim leading spaces
             size_t s = rest.find_first_not_of(" \t\r\n");
             if (s != string::npos) rest = rest.substr(s);
-            add_log(p, string("PRINT: ") + rest);
+            add_log(p, string("PRINT:       ") + rest);
             ostringstream linebuf;
-            linebuf << "PRINT: " << rest;
+            linebuf << "PRINT:      " << rest;
             lock_guard<mutex> lk(p->mtx);
             p->code.lines.push_back(linebuf.str());
             cout << "Printed message logged." << endl;
@@ -277,7 +304,7 @@ static void run_process_screen(const string& process_name) {
                 this_thread::sleep_for(chrono::milliseconds(t));
                 add_log(p, "SLEEP end");
                 lock_guard<mutex> lk(p->mtx);
-                p->code.lines.push_back(string("SLEEP: ") + to_string(t) + "ms");
+                p->code.lines.push_back(string("SLEEP:      ") + to_string(t) + "ms");
                 cout << "Slept " << t << " ms." << endl;
             } catch (...) {
                 cout << "Invalid number." << endl;
@@ -354,7 +381,7 @@ static void run_process_screen(const string& process_name) {
             }
 
             // Add log AFTER unlocking to avoid recursive locking
-            add_log(p, (cmd == "add" ? "ADD: " : "SUB: ") + 
+            add_log(p, (cmd == "add" ? "ADD:        " : "SUB:       ") + 
                     var1 + " = " + var2 + 
                     (cmd=="add"?" + ":" - ") + 
                     var3 + " -> " + to_string(result));
@@ -368,6 +395,11 @@ static void run_process_screen(const string& process_name) {
         }
     }
 
+    if (scheduler && !p->finished) {
+        scheduler->add_process(p);
+        cout << "[Info] Process " << p->name << " added to scheduler queue.\n";
+    }
+
     clear_console();
 }
 
@@ -376,7 +408,7 @@ static void run_main_menu() {
      string command;
 
     cout << "Welcome to CSOPESY!" <<  endl;
-    cout << "Version Date: October, 2025" <<  endl <<  endl;
+    cout << "Version Date: November 3, 2025" <<  endl <<  endl;
     cout.flush();
 
     while (true) {
@@ -389,26 +421,32 @@ static void run_main_menu() {
         if (root.empty()) continue;
 
         if (root == "exit") {
-            // Stop scheduler if running
-            if (scheduler.is_running()) scheduler.stop();
+            //Stop scheduler if running
+            if (scheduler_running.load()) {
+                scheduler_running.store(false);
+                if (scheduler_thread.joinable()) scheduler_thread.join();
+            }
             break;
         }
 
         if (root == "initialize") {
             //Load config.txt
-            auto err = load_config_from_file("config.txt", config);
+            auto err = load_config_from_file("config.txt", global_config);
             if (err.has_value()) {
                  cout << "Failed to initialize: " << err.value() <<  endl;
             } else {
                 initialized = true;
                  cout << "Initialized from config.txt" <<  endl;
-                 cout << " num-cpu=" << config.num_cpu  <<  endl;
-                 cout << " scheduler=" << config.scheduler <<  endl;
-                 cout << " quantum-cycles=" << config.quantum_cycles <<  endl;
-                 cout << " batch-process-freq=" << config.batch_process_freq <<  endl;
-                 cout << " min-ins=" << config.min_ins <<  endl;
-                 cout << " max-ins=" << config.max_ins <<  endl;
-                 cout << " delay-per-exec=" << config.delay_per_exec <<  endl;
+                 cout << " num-cpu=" << global_config.num_cpu  <<  endl;
+                 cout << " scheduler=" << global_config.scheduler <<  endl;
+                 cout << " quantum-cycles=" << global_config.quantum_cycles <<  endl;
+                 cout << " batch-process-freq=" << global_config.batch_process_freq <<  endl;
+                 cout << " min-ins=" << global_config.min_ins <<  endl;
+                 cout << " max-ins=" << global_config.max_ins <<  endl;
+                 cout << " delay-per-exec=" << global_config.delay_per_exec <<  endl;
+
+                scheduler = make_unique<Scheduler>(global_config);
+                cout << "Scheduler object created successfully." << endl;
             }
             continue;
         }
@@ -447,19 +485,23 @@ static void run_main_menu() {
         }
 
         if (root == "scheduler-start") {
-            if (scheduler.is_running()) {
+            if (scheduler_running.load()) {
                 cout << "Scheduler already running." << endl;
             } else {
-                scheduler.start();
+                scheduler_running.store(true);
+                // scheduler_thread = thread([](){ scheduler_loop(500); });  // temporarily disabled to prevent input freezing
+                //cout << "Scheduler started (simulated)." << endl;
+                if (scheduler) scheduler->start();
+                cout << "Scheduler started." << endl;
             }
             continue;
         }
 
         if (root == "scheduler-stop") {
-            if (!scheduler.is_running()) {
+            if (!scheduler || !scheduler->is_running()) {
                 cout << "Scheduler is not running." << endl;
             } else {
-                scheduler.stop();
+                if (scheduler) scheduler->stop();
             }
             continue;
         }

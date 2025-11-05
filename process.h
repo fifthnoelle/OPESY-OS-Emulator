@@ -18,8 +18,8 @@
 using namespace std;
 
 struct CustomProcessLines {
-    vector<string> lines;         // all code lines (DECLARE, ADD, etc.)
-    vector<string> runningLines;  // lines currently executing
+    vector<string> lines = {"DECLARE:       uint16_t var1 = 0", "DECLARE:       uint16_t var2 = 0", "DECLARE:       uint16_t var3 = 0"};         // all code lines (DECLARE, ADD, etc.)
+    vector<string> runningLines = {"DECLARE:       uint16_t var1 = 0", "DECLARE:       uint16_t var2 = 0", "DECLARE:       uint16_t var3 = 0"};  // lines currently executing
     int lineNumber = 0;
 };
 
@@ -89,13 +89,19 @@ inline string timestamp_now() {
 }
 
 // Adds a log with a timestamp to the process (thread-safe)
-inline void add_log(const  shared_ptr<ProcessStub> &p, const  string &msg) {
+inline void add_log(const shared_ptr<ProcessStub> &p, const string &msg, int core_id = -1) {
     if (!p) return;
-    lock_guard< mutex> lk(p->mtx);
+    lock_guard<mutex> lk(p->mtx);
     ProcessStub::LogEntry e;
     e.timestamp = timestamp_now();
-    e.message = msg;
-    p->logs.push_back( move(e));
+
+    // Only prefix with "Core <id>" if the message itself doesn't already mention it
+    if (core_id >= 0 && msg.find("Core") == string::npos)
+        e.message = "Core " + to_string(core_id) + ": " + msg;
+    else
+        e.message = msg;
+
+    p->logs.push_back(move(e));
 }
 
 //Create a process if it doesn't exist
@@ -123,36 +129,7 @@ inline  string gen_auto_name() {
     return ss.str();
 }
 
-inline auto arithmetic(vector<double> nums, string operation){
 
-    uint16_t base1 = 5; 
-    uint16_t base2 = 5;
-
-    double result = 0;
-
-    if(operation == "add"){
-
-        for(double n : nums){
-            result += n;
-        }
-    }
-    else if(operation == "sub"){
-        //result = nums[0];
-        //sort(nums.begin(), nums.end(), greater<double>());
-        for(double n: nums){
-            //if(n == nums[0]) continue;
-            result -= n;
-        }
-    }
-    
-    return result;
-
-}
-
-inline string declaration(string declaration){
-
-    return "";
-}
 
 void generate_dummy_instructions(shared_ptr<ProcessStub> p, int num_instructions) {
     static const vector<string> ops = {"DECLARE", "ADD", "SUBTRACT", "PRINT", "SLEEP", "FOR"};
