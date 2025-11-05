@@ -89,7 +89,6 @@ public:
 private:
     void core_loop(int core_id) {
         int tick = 0;
-
         while (running.load()) {
             shared_ptr<ProcessStub> p;
 
@@ -108,39 +107,39 @@ private:
 
             if (!p) continue;
 
-            add_log(p, "Core " + to_string(core_id) + ": Picked process " + p->name);
+            add_log(p, "Core " + to_string(core_id + 1) + ": Picked process " + p->name);
 
             if (config.scheduler == "fcfs") {
-                add_log(p, "Core " + to_string(core_id) + ": Starting FCFS job", core_id);
+                add_log(p, "Core " + to_string(core_id) + ": Starting FCFS job", core_id + 1);
                 int exec_time = rand() % 6 + 10;
                 for (int i = 0; i < exec_time && running.load(); ++i) {
                     this_thread::sleep_for(chrono::milliseconds(config.delay_per_exec));
-                    add_log(p, "Core " + to_string(core_id) + ": Executing instruction " + to_string(i + 1), core_id);
+                    add_log(p, "Core " + to_string(core_id + 1) + ": Executing instruction " + to_string(i + 1), core_id + 1);
                 }
                 {
                     lock_guard<mutex> lk(p->mtx);
                     p->finished = true;
-                    add_log(p, "Core " + to_string(core_id) + ": FCFS job finished", core_id);
+                    add_log(p, "Core " + to_string(core_id + 1) + ": FCFS job finished", core_id + 1);
                 }
             } else if (config.scheduler == "rr") {
                 int quantum = config.quantum_cycles;
-                add_log(p, "Core " + to_string(core_id) + ": Starting RR job", core_id);
+                add_log(p, "Core " + to_string(core_id + 1) + ": Starting RR job", core_id + 1);
 
                 for (int q = 0; q < quantum && running.load(); ++q) {
                     this_thread::sleep_for(chrono::milliseconds(config.delay_per_exec));
                     ++tick;
-                    add_log(p, "Core " + to_string(core_id) + ": RR tick " + to_string(tick), core_id);
+                    add_log(p, "Core " + to_string(core_id + 1) + ": RR tick " + to_string(tick), core_id + 1);
                 }
 
                 {
                     lock_guard<mutex> lk(mtx);
                     if (running.load()) {
-                        add_log(p, "Core " + to_string(core_id) + ": Time slice complete — requeuing");
+                        add_log(p, "Core " + to_string(core_id + 1) + ": Time slice complete — requeuing");
                         ready_queue.push(p);
                         cv.notify_one();
                     } else {
                         p->finished = true;
-                        add_log(p, "Core " + to_string(core_id) + ": RR job finished", core_id);
+                        add_log(p, "Core " + to_string(core_id + 1) + ": RR job finished", core_id + 1);
                     }
                 }
             }
