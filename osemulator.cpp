@@ -99,6 +99,7 @@ static void print_summary( ostream &out) {
     if (scheduler) {
         auto cores = scheduler->get_active_cores();
         auto proc = scheduler->get_core_processes();
+        
         for (int i = 0; i < (int)cores.size(); ++i) {
             if (cores[i] && !proc[i].empty()) {
                 out << proc[i]

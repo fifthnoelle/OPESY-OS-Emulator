@@ -19,6 +19,7 @@ extern atomic<int> active_cores;
 class Scheduler {
 private:
     Config config;
+    CustomProcessLines instructions;
     atomic<bool> running{false};
     vector<thread> core_threads;
     queue<shared_ptr<ProcessStub>> ready_queue;
@@ -53,7 +54,7 @@ public:
             core_threads.emplace_back(&Scheduler::core_loop, this, i);
 
         // now create and enqueue processes
-        int num_processes = 3;
+        int num_processes = 99999;
         for (int i = 0; i < num_processes; ++i) {
             string pname = "p" + to_string(i + 1);
             auto p = create_process(pname);
@@ -100,9 +101,11 @@ private:
                 ready_queue.pop();
 
                 // Mark this core as busy
-                core_active[core_id] = true;
-                core_process[core_id] = p->name;
-                active_cores.fetch_add(1);
+                if(p->finished == false){
+                    core_active[core_id] = true;
+                    core_process[core_id] = p->name;
+                    active_cores.fetch_add(1);
+                }
             }
 
             if (!p) continue;
@@ -124,13 +127,25 @@ private:
             } else if (config.scheduler == "rr") {
                 int quantum = config.quantum_cycles;
                 add_log(p, "Core " + to_string(core_id + 1) + ": Starting RR job", core_id + 1);
-
+                
                 for (int q = 0; q < quantum && running.load(); ++q) {
-                    this_thread::sleep_for(chrono::milliseconds(config.delay_per_exec));
                     ++tick;
-                    add_log(p, "Core " + to_string(core_id + 1) + ": RR tick " + to_string(tick), core_id + 1);
+                    if(instructions.lineNumber >= instructions.lines.size()){ 
+                        instructions.lineNumber = 0;
+                        p->finished = true;
+                    }
+                    
+                    instructions.runningLines.push_back(instructions.lines[instructions.lineNumber]);
+                    if(instructions.lineNumber < instructions.lines.size()){
+                        //cout << "Core " + to_string(core_id + 1) + ": RR tick : " + to_string(tick) + " " + instructions.runningLines[instructions.lineNumber]<< endl;
+                        add_log(p, "Core " + to_string(core_id + 1) + ": RR tick : " + to_string(tick) + " " + instructions.runningLines[instructions.lineNumber], core_id + 1);
+                        instructions.lineNumber += 1;
+                    }else
+                        instructions.lineNumber = 0;
+                    if(tick % 5 == 0){
+                        this_thread::sleep_for(chrono::milliseconds(config.delay_per_exec));
+                    }
                 }
-
                 {
                     lock_guard<mutex> lk(mtx);
                     if (running.load()) {
@@ -142,15 +157,20 @@ private:
                         add_log(p, "Core " + to_string(core_id + 1) + ": RR job finished", core_id + 1);
                     }
                 }
+
+                
             }
 
             // Mark this core as idle
             {
                 lock_guard<mutex> lk(mtx);
-                core_active[core_id] = false;
-                core_process[core_id] = "";
-                active_cores.fetch_sub(1);
+                if(p->finished == false){
+                    core_active[core_id] = false;
+                    core_process[core_id] = "";
+                    active_cores.fetch_sub(1);
+                }
             }
+            
         }
     }
 };

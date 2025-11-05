@@ -7,13 +7,13 @@
 using namespace std;
 
 struct Config {
-    int num_cpu = 1; //[1,128]
+    int num_cpu = 4; //[1,128]
     string scheduler = "rr"; //"fcfs" or "rr"
     uint32_t quantum_cycles = 5; //[1, 2^32-1]
     uint32_t batch_process_freq = 1; //[1, 2^32-1]
     uint32_t min_ins = 1; //[1, 2^32-1]
     uint32_t max_ins = 1; //[1, 2^32-1]
-    uint32_t delay_per_exec = 0; //[0, 2^32-1]
+    uint32_t delay_per_exec = 20; //[0, 2^32-1]
 };
 
 #include <optional>
