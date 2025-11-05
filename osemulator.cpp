@@ -74,48 +74,39 @@ static void scheduler_loop() {
 }
 
 //Print summary works for displaying and writing to file
-static void print_summary( ostream &out) {
-    lock_guard<mutex> lk(repository_mutex);
-    int total = processes.size();
-    int running = 0, finished = 0;
-
-    for (auto &kv : processes) {
-        auto &p = kv.second;
-        lock_guard<mutex> plk(p->mtx);
-        if (p->finished) ++finished; else ++running;
-    }
-
+static void print_summary(ostream &out) {
     extern atomic<int> active_cores;
     double utilization = (100.0 * active_cores.load()) / global_config.num_cpu;
-
+    
     out << fixed << setprecision(2);
     out << "CPU Utilization: " << utilization << "%" << endl;
     out << "Cores used: " << active_cores.load() << endl;
-    out << "Cores available: " << global_config.num_cpu - active_cores.load() << endl;
+    out << "Cores available: " << (global_config.num_cpu - active_cores.load()) << endl;
     out << "---------------------------------------------------" << endl;
     out << "Running Processes:" << endl;
-
-    // Query current core states from scheduler
-    if (scheduler) {
-        auto cores = scheduler->get_active_cores();
-        auto proc = scheduler->get_core_processes();
-        for (int i = 0; i < (int)cores.size(); ++i) {
-            if (cores[i] && !proc[i].empty()) {
-                out << proc[i]
-                    << "\t(" << timestamp_now() << ")\tCore " 
-                    << i + 1 << "/" << global_config.num_cpu << endl;
-            }
+    
+    // Display running processes
+    lock_guard<mutex> lk(repository_mutex);
+    for (auto &kv : processes) {
+        auto &p = kv.second;
+        if (!p->finished.load() && p->assigned_core.load() >= 0) {
+            out << p->name << "\t("
+                << p->created_timestamp << ")\t"
+                << "Core: " << p->assigned_core.load() << "\t"
+                << p->current_instruction.load() << " / " << p->total_instructions
+                << endl;
         }
     }
-
+    
     out << "\nFinished Processes:" << endl;
     for (auto &kv : processes) {
         auto &p = kv.second;
-        lock_guard<mutex> plk(p->mtx);
-        if (p->finished) {
-            string last_time = "-";
-            if (!p->logs.empty()) last_time = p->logs.back().timestamp;
-            out << p->name << "\t(" << last_time << ")\tFinished" << endl;
+        if (p->finished.load()) {
+            out << p->name << "\t("
+                << p->created_timestamp << ")\t"
+                << "Finished\t"
+                << p->total_instructions << " / " << p->total_instructions
+                << endl;
         }
     }
     out << "---------------------------------------------------" << endl;
