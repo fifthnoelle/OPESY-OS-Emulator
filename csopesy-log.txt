@@ -1,10 +1,10 @@
-CPU Utilization: 0.00%
-Cores used: 0
+CPU Utilization: 100.00%
+Cores used: 2
 Cores available: 2
 ---------------------------------------------------
 Running Processes:
+p2	(2025/11/05 19:33:46.720)	Core 0/2
+p3	(2025/11/05 19:33:46.721)	Core 1/2
 
 Finished Processes:
-p2	(2025/11/04 14:47:34.579)	Finished
-p3	(2025/11/04 14:47:34.579)	Finished
 ---------------------------------------------------

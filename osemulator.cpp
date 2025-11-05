@@ -91,7 +91,7 @@ static void print_summary( ostream &out) {
     out << fixed << setprecision(2);
     out << "CPU Utilization: " << utilization << "%" << endl;
     out << "Cores used: " << active_cores.load() << endl;
-    out << "Cores available: " << global_config.num_cpu << endl;
+    out << "Cores available: " << global_config.num_cpu - active_cores.load() << endl;
     out << "---------------------------------------------------" << endl;
     out << "Running Processes:" << endl;
 
@@ -103,7 +103,7 @@ static void print_summary( ostream &out) {
             if (cores[i] && !proc[i].empty()) {
                 out << proc[i]
                     << "\t(" << timestamp_now() << ")\tCore " 
-                    << i << "/" << global_config.num_cpu << endl;
+                    << i + 1 << "/" << global_config.num_cpu << endl;
             }
         }
     }
@@ -265,7 +265,7 @@ static void run_process_screen(const string& process_name) {
                 {
                     lock_guard<mutex> lk(p->mtx);
                     ostringstream linebuf;
-                    linebuf << "Declare: uint16_t " << var << " = " << val << ";";
+                    linebuf << "DECLARE:        uint16_t " << var << " = " << val << ";";
                     p->code.lines.push_back(linebuf.str());
                 }
 
@@ -285,9 +285,9 @@ static void run_process_screen(const string& process_name) {
             // trim leading spaces
             size_t s = rest.find_first_not_of(" \t\r\n");
             if (s != string::npos) rest = rest.substr(s);
-            add_log(p, string("PRINT: ") + rest);
+            add_log(p, string("PRINT:       ") + rest);
             ostringstream linebuf;
-            linebuf << "PRINT: " << rest;
+            linebuf << "PRINT:      " << rest;
             lock_guard<mutex> lk(p->mtx);
             p->code.lines.push_back(linebuf.str());
             cout << "Printed message logged." << endl;
@@ -304,7 +304,7 @@ static void run_process_screen(const string& process_name) {
                 this_thread::sleep_for(chrono::milliseconds(t));
                 add_log(p, "SLEEP end");
                 lock_guard<mutex> lk(p->mtx);
-                p->code.lines.push_back(string("SLEEP: ") + to_string(t) + "ms");
+                p->code.lines.push_back(string("SLEEP:      ") + to_string(t) + "ms");
                 cout << "Slept " << t << " ms." << endl;
             } catch (...) {
                 cout << "Invalid number." << endl;
@@ -381,7 +381,7 @@ static void run_process_screen(const string& process_name) {
             }
 
             // Add log AFTER unlocking to avoid recursive locking
-            add_log(p, (cmd == "add" ? "ADD: " : "SUB: ") + 
+            add_log(p, (cmd == "add" ? "ADD:        " : "SUB:       ") + 
                     var1 + " = " + var2 + 
                     (cmd=="add"?" + ":" - ") + 
                     var3 + " -> " + to_string(result));

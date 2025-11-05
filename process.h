@@ -18,8 +18,8 @@
 using namespace std;
 
 struct CustomProcessLines {
-    vector<string> lines;         // all code lines (DECLARE, ADD, etc.)
-    vector<string> runningLines;  // lines currently executing
+    vector<string> lines = {"DECLARE:       uint16_t var1 = 0", "DECLARE:       uint16_t var2 = 0", "DECLARE:       uint16_t var3 = 0"};         // all code lines (DECLARE, ADD, etc.)
+    vector<string> runningLines = {"DECLARE:       uint16_t var1 = 0", "DECLARE:       uint16_t var2 = 0", "DECLARE:       uint16_t var3 = 0"};  // lines currently executing
     int lineNumber = 0;
 };
 
@@ -129,36 +129,7 @@ inline  string gen_auto_name() {
     return ss.str();
 }
 
-inline auto arithmetic(vector<double> nums, string operation){
 
-    uint16_t base1 = 5; 
-    uint16_t base2 = 5;
-
-    double result = 0;
-
-    if(operation == "add"){
-
-        for(double n : nums){
-            result += n;
-        }
-    }
-    else if(operation == "sub"){
-        //result = nums[0];
-        //sort(nums.begin(), nums.end(), greater<double>());
-        for(double n: nums){
-            //if(n == nums[0]) continue;
-            result -= n;
-        }
-    }
-    
-    return result;
-
-}
-
-inline string declaration(string declaration){
-
-    return "";
-}
 
 void generate_dummy_instructions(shared_ptr<ProcessStub> p, int num_instructions) {
     static const vector<string> ops = {"DECLARE", "ADD", "SUBTRACT", "PRINT", "SLEEP", "FOR"};
